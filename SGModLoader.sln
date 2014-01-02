@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual C++ Express 2010
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SA2ModLoader", "SA2ModLoader\SA2ModLoader.vcxproj", "{3BF5C1B2-E3A4-43E7-9C2A-E445810834DE}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SGModLoader", "SGModLoader\SGModLoader.vcxproj", "{3BF5C1B2-E3A4-43E7-9C2A-E445810834DE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

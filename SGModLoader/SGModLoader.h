@@ -110,32 +110,20 @@ static BOOL WriteCall(void *writeaddress, void *funcaddress)
 	return WriteData(writeaddress, data);
 }
 
+static __declspec(naked) int __fastcall jump(void *funcaddress) {
+   __asm {
+	 sub esp, 4
+	 jmp ecx
+   }
+}
+
+static
+
 // SA2 Enums
 #define makemask(enumname,membername) enumname##_##membername = (1 << enumname##Bits_##membername)
 #define makemasks(enumname,membername) enumname##s_##membername = (1 << enumname##Bits_##membername)
 
-enum Characters
-{
-	Characters_Sonic,
-	Characters_Shadow,
-	Characters_Tails,
-	Characters_Eggman,
-	Characters_Knuckles,
-	Characters_Rouge,
-	Characters_MechTails,
-	Characters_MechEggman,
-	Characters_Amy,
-	Characters_SuperSonic,
-	Characters_SuperShadow,
-	Characters_B,
-	Characters_MetalSonic,
-	Characters_ChaoWalker,
-	Characters_DarkChaoWalker,
-	Characters_Tikal,
-	Characters_Chaos
-};
-
-enum LevelIDs
+/*enum LevelIDs
 {
 	LevelIDs_BasicTest,
 	LevelIDs_KnucklesTest,
@@ -209,130 +197,18 @@ enum LevelIDs
 	LevelIDs_KartRace,
 	LevelIDs_ChaoWorld = 90,
 	LevelIDs_Invalid
-};
-
-enum UpgradeBits : int
-{
-	UpgradeBits_SonicLightShoes,
-	UpgradeBits_SonicAncientLight,
-	UpgradeBits_SonicMagicGloves,
-	UpgradeBits_SonicFlameRing,
-	UpgradeBits_SonicBounceBracelet,
-	UpgradeBits_SonicMysticMelody,
-	UpgradeBits_TailsBooster,
-	UpgradeBits_TailsBazooka,
-	UpgradeBits_TailsLaserBlaster,
-	UpgradeBits_TailsMysticMelody,
-	UpgradeBits_KnucklesShovelClaw,
-	UpgradeBits_KnucklesSunglasses,
-	UpgradeBits_KnucklesHammerGloves,
-	UpgradeBits_KnucklesAirNecklace,
-	UpgradeBits_KnucklesMysticMelody,
-	UpgradeBits_SuperSonic,
-	UpgradeBits_ShadowAirShoes,
-	UpgradeBits_ShadowAncientLight,
-	UpgradeBits_ShadowFlameRing,
-	UpgradeBits_ShadowMysticMelody,
-	UpgradeBits_EggmanJetEngine,
-	UpgradeBits_EggmanLargeCannon,
-	UpgradeBits_EggmanLaserBlaster,
-	UpgradeBits_EggmanProtectiveArmor,
-	UpgradeBits_EggmanMysticMelody,
-	UpgradeBits_RougePickNails,
-	UpgradeBits_RougeTreasureScope,
-	UpgradeBits_RougeIronBoots,
-	UpgradeBits_RougeMysticMelody
-};
-
-enum Upgrades : int
-{
-	makemasks(Upgrade, SonicLightShoes),
-	makemasks(Upgrade, SonicAncientLight),
-	makemasks(Upgrade, SonicMagicGloves),
-	makemasks(Upgrade, SonicFlameRing),
-	makemasks(Upgrade, SonicBounceBracelet),
-	makemasks(Upgrade, SonicMysticMelody),
-	makemasks(Upgrade, TailsBooster),
-	makemasks(Upgrade, TailsBazooka),
-	makemasks(Upgrade, TailsLaserBlaster),
-	makemasks(Upgrade, TailsMysticMelody),
-	makemasks(Upgrade, KnucklesShovelClaw),
-	makemasks(Upgrade, KnucklesSunglasses),
-	makemasks(Upgrade, KnucklesHammerGloves),
-	makemasks(Upgrade, KnucklesAirNecklace),
-	makemasks(Upgrade, KnucklesMysticMelody),
-	makemasks(Upgrade, SuperSonic),
-	makemasks(Upgrade, ShadowAirShoes),
-	makemasks(Upgrade, ShadowAncientLight),
-	makemasks(Upgrade, ShadowFlameRing),
-	makemasks(Upgrade, ShadowMysticMelody),
-	makemasks(Upgrade, EggmanJetEngine),
-	makemasks(Upgrade, EggmanLargeCannon),
-	makemasks(Upgrade, EggmanLaserBlaster),
-	makemasks(Upgrade, EggmanProtectiveArmor),
-	makemasks(Upgrade, EggmanMysticMelody),
-	makemasks(Upgrade, RougePickNails),
-	makemasks(Upgrade, RougeTreasureScope),
-	makemasks(Upgrade, RougeIronBoots),
-	makemasks(Upgrade, RougeMysticMelody)
-};
-
-enum PowerupBits
-{
-	PowerupBits_Barrier,
-	PowerupBits_MagneticBarrier,
-	PowerupBits_Invincibility = 15
-};
-
-enum Powerups : unsigned short
-{
-	makemasks(Powerup, Barrier),
-	makemasks(Powerup, MagneticBarrier),
-	makemasks(Powerup, Invincibility)
-};
-
-enum ButtonBits
-{
-	ButtonBits_B = 1,
-	ButtonBits_A,
-	ButtonBits_Start,
-	ButtonBits_Up,
-	ButtonBits_Down,
-	ButtonBits_Left,
-	ButtonBits_Right,
-	ButtonBits_Z,
-	ButtonBits_Y,
-	ButtonBits_X,
-	ButtonBits_R = 16,
-	ButtonBits_L
-};
-
-enum Buttons : int
-{
-	makemasks(Button, B),
-	makemasks(Button, A),
-	makemasks(Button, Start),
-	makemasks(Button, Up),
-	makemasks(Button, Down),
-	makemasks(Button, Left),
-	makemasks(Button, Right),
-	makemasks(Button, Z),
-	makemasks(Button, Y),
-	makemasks(Button, X),
-	makemasks(Button, R),
-	makemasks(Button, L)
-};
+};*/
 
 // SA2 Structs
-typedef NJS_VECTOR Vertex;
-typedef NJS_TEXLIST TexList;
+//typedef NJS_VECTOR Vertex;
+//typedef NJS_TEXLIST TexList;
 
 #pragma pack(push, 1)
 struct Rotation {
 	int x, y, z;
 };
 
-struct struct_v5
+/*struct struct_v5
 {
   __int16 char0;
   char gap_2[2];
@@ -860,13 +736,13 @@ struct AnimationFileHeader
 	NJS_MOTION *Animation;
 	char *Name;
 	int ModelNum;
-};
+};*/
 #pragma pack(pop)
 
 // SA2 Variables
 #define DataPointer(type,name,address) static type &name = *(type *)address
 #define DataArray(type,name,address,length) static type *const name = (type *)address; static const int name##_Length = length
-DataArray(AnimationInfo, TailsAnimList, 0xA0D608, 118);
+/*DataArray(AnimationInfo, TailsAnimList, 0xA0D608, 118);
 DataArray(AnimationInfo, MechEggmanAnimList, 0xA0E1F0, 139);
 DataArray(AnimationInfo, MechTailsAnimList, 0xA0EAA0, 190);
 DataArray(AnimationInfo, ChaoWalkerAnimList, 0xA0F680, 198);
@@ -916,7 +792,7 @@ DataArray(CharObj1 *, MainCharObj1, 0x1DEA6C0, 2);
 DataArray(ObjectMaster *, MainCharacter, 0x1DEA6E0, 2);
 DataArray(AnimationIndex, CharacterAnimations, 0x1DEA700, 300);
 DataArray(ControllerData *, Controllers, 0x1DEFB60, 4);
-DataArray(int, MenuPressedButtons, 0x1DEFB10, 2);
+DataArray(int, MenuPressedButtons, 0x1DEFB10, 2);*/
 
 // SA2 Functions
 #define FunctionPointer(RETURN_TYPE, NAME, ARGS, ADDRESS) static RETURN_TYPE (__cdecl *const NAME)ARGS = (RETURN_TYPE (*)ARGS)ADDRESS
@@ -925,7 +801,7 @@ DataArray(int, MenuPressedButtons, 0x1DEFB10, 2);
 #define VoidFunc(name,address) FunctionPointer(void,name,(void),address)
 #define CharLoadFunc(name,address) FunctionPointer(void,name,(int playerNum),address)
 #define ObjectFunc(name,address) FunctionPointer(void,name,(ObjectMaster *obj),address)
-CharLoadFunc(LoadSonic, 0x716E00);
+/*CharLoadFunc(LoadSonic, 0x716E00);
 CharLoadFunc(LoadAmy, 0x7170E0);
 CharLoadFunc(LoadShadow, 0x717360);
 CharLoadFunc(LoadMetalSonic, 0x717640);
@@ -963,9 +839,9 @@ VoidFunc(LoadDryLagoonCharAnims, 0x647830);
 VoidFunc(LoadSandOceanCharAnims, 0x658A10);
 VoidFunc(LoadCannonsCoreKCharAnims, 0x65EF70);
 VoidFunc(LoadHiddenBaseCharAnims, 0x711C30);
-VoidFunc(LoadEmeraldManager, 0x73AA70);
+VoidFunc(LoadEmeraldManager, 0x73AA70);*/
 
-static const void *InitPlayerPtr = (void*)0x43DA40;
+/*static const void *InitPlayerPtr = (void*)0x43DA40;
 static void InitPlayer(int playerNum)
 {
 	__asm
@@ -1182,4 +1058,5 @@ static void LoadEggman(int playerNum)
 		call LoadEggmanPtr
 	}
 }
+*/
 #endif

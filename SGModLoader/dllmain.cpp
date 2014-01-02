@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <DbgHelp.h>
 #include <cstdio>
-#include "SA2ModLoader.h"
+#include "SGModLoader.h"
 using namespace std;
 
 typedef unordered_map<string, string> IniGroup;
@@ -466,7 +466,7 @@ void __cdecl ProcessCodes()
 	ProcessCodeList(codes);
 }
 
-int __cdecl SA2DebugOutput_i(const char *Format, ...)
+int __cdecl SGDebugOutput_i(const char *Format, ...)
 {
 	va_list ap;
 	va_start(ap, Format);
@@ -477,7 +477,7 @@ int __cdecl SA2DebugOutput_i(const char *Format, ...)
 }
 
 const char *addrfmt = "[0x%08X] ";
-__declspec(naked) int __cdecl SA2DebugOutput(const char *Format, ...)
+__declspec(naked) int __cdecl SGDebugOutput(const char *Format, ...)
 {
 	__asm
 	{
@@ -486,7 +486,7 @@ __declspec(naked) int __cdecl SA2DebugOutput(const char *Format, ...)
 		push addrfmt
 		call printf
 		add esp, 8*/
-		jmp SA2DebugOutput_i
+		jmp SGDebugOutput_i
 	}
 }
 
@@ -567,17 +567,18 @@ unsigned char ReadCodes(istream &stream, list<Code> &list)
 
 void __cdecl InitMods(void)
 {
-	datadllhandle = LoadLibrary(L".\\resource\\gd_PC\\DLL\\Win32\\Data_DLL_orig.dll");
+	datadllhandle = LoadLibrary(L".\\cpkredir.dll");
 	if (!datadllhandle)
 	{
-		MessageBox(NULL, L"Data_DLL_orig.dll could not be loaded!\n\nSA2 will now proceed to abruptly exit.", L"SA2 Mod Loader", MB_ICONERROR);
-		ExitProcess(1);
+		if (MessageBoxA(NULL, "cpkredir.dll could not be loaded!\n\nContinue anyway?", "SG Mod Loader", MB_ICONWARNING | MB_YESNO) == IDNO)
+			ExitProcess(1);
 	}
-	HookTheAPI();
-	ifstream str = ifstream("mods\\SA2ModLoader.ini");
+	LoadLibrary(L".\\D3dHook.dll");
+	//HookTheAPI();
+	ifstream str = ifstream("mods\\SGModLoader.ini");
 	if (!str.is_open())
 	{
-		MessageBox(NULL, L"mods\\SA2ModLoader.ini could not be read!", L"SA2 Mod Loader", MB_ICONWARNING);
+		MessageBox(NULL, L"mods\\SGModLoader.ini could not be read!", L"SG Mod Loader", MB_ICONWARNING);
 		return;
 	}
 	IniDictionary ini = LoadINI(str);
@@ -594,16 +595,16 @@ void __cdecl InitMods(void)
 	if (item == "true")
 	{
 		AllocConsole();
-		SetConsoleTitle(L"SA2 Mod Loader output");
+		SetConsoleTitle(L"SG Mod Loader output");
 		freopen("CONOUT$", "wb", stdout);
 		console = true;
-		printf("SA2 Mod Loader version %d, built %s\n", ModLoaderVer, __TIMESTAMP__);
+		printf("SG Mod Loader version %d, built %s\n", ModLoaderVer, __TIMESTAMP__);
 		printf("Loading mods...\n");
 	}
-	item = settings["ShowSA2DebugOutput"];
+	item = settings["ShowSGDebugOutput"];
 	transform(item.begin(), item.end(), item.begin(), ::tolower);
 	if (item == "true")
-		WriteJump((void *)0x426740, SA2DebugOutput);
+		WriteJump((void *)0x426740, SGDebugOutput);
 	InitializeCriticalSection(&filereplacesection);
 	DWORD oldprot;
 	VirtualProtect((void *)0x87342C, 0xA3BD4, PAGE_WRITECOPY, &oldprot);
@@ -653,7 +654,7 @@ void __cdecl InitMods(void)
 				filereplaces[NormalizePath(it->second)] = NormalizePath(it->first);
 			}
 		}
-		string sysfol = dir + "\\gd_pc";
+		string sysfol = dir;
 		transform(sysfol.begin(), sysfol.end(), sysfol.begin(), ::tolower);
 		if (GetFileAttributesA(sysfol.c_str()) & FILE_ATTRIBUTE_DIRECTORY)
 			ScanFolder(sysfol, sysfol.length() + 1);
@@ -664,7 +665,7 @@ void __cdecl InitMods(void)
 			if (modexe.compare(exefilename) != 0)
 			{
 				const char *msg = ("Mod \"" + modinfo["Name"] + "\" should be run from \"" + modexe + "\", but you are running \"" + exefilename + "\".\n\nContinue anyway?").c_str();
-				if (MessageBoxA(NULL, msg, "SA2 Mod Loader", MB_ICONWARNING | MB_YESNO) == IDNO)
+				if (MessageBoxA(NULL, msg, "SG Mod Loader", MB_ICONWARNING | MB_YESNO) == IDNO)
 					ExitProcess(1);
 			}
 		}
@@ -675,7 +676,7 @@ void __cdecl InitMods(void)
 			HMODULE module = LoadLibraryA(filename.c_str());
 			if (module)
 			{
-				ModInfo *info = (ModInfo *)GetProcAddress(module, "SA2ModInfo");
+				ModInfo *info = (ModInfo *)GetProcAddress(module, "SGModInfo");
 				if (info)
 				{
 					if (info->Patches)
@@ -714,7 +715,10 @@ void __cdecl InitMods(void)
 		ReadCodes(str, codes);
 	}
 	str.close();
-	WriteJump((void *)0x77E897, ProcessCodes);
+	// WriteJump((void *)0x77E897, ProcessCodes);
+	
+	// Continue game's initilization
+	jump((void *)0xA6BD56);
 }
 
 BOOL APIENTRY DllMain( HMODULE hModule,
@@ -735,7 +739,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		delete[] buf;
 		transform(sa2dir.begin(), sa2dir.end(), sa2dir.begin(), ::tolower);
 		sa2dir += "\\";
-		WriteJump((void *)0x77DEEA, InitMods);
+		WriteJump((void *)0xA6BED9, InitMods);
 		break;
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:

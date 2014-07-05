@@ -9,6 +9,7 @@
 #include <DbgHelp.h>
 #include <cstdio>
 #include "SGModLoader.h"
+#include "codes.h"
 using namespace std;
 
 typedef unordered_map<string, string> IniGroup;
@@ -43,7 +44,10 @@ IniDictionary LoadINI(istream &textfile)
 				case 'r': // carriage return
 					sb += '\r';
 					break;
+				case '\\':
+					goto appendchar;
 				default: // literal character
+					sb += '\\';
 					goto appendchar;
 				}
 				break;
@@ -81,6 +85,9 @@ appendchar:
 			{
 				key = line.substr(0, firstequals);
 				value = line.substr(firstequals + 1);
+				// strip quotaion marks around values
+				if (value[0] == '"' && value[value.length() - 1] == '"')
+					value = value.substr(1, value.length() - 2);
 			}
 			else
 				key = line;
@@ -115,13 +122,27 @@ inline int backslashes(int c)
 		return c;
 }
 
+string &basedir(string &path)
+{
+	string dir = "";
+	size_t lastslash = path.find_last_of("/\\");
+	if (lastslash != string::npos)
+		dir = path.substr(0, lastslash + 1);
+	return dir;
+}
+
+
 IniGroup settings;
+IniGroup cpkredir;
 unordered_map<string, char *> filemap = unordered_map<string, char *>();
 unordered_map<string, string> filereplaces = unordered_map<string, string>();
 const string resourcedir = "resource\\gd_pc\\";
 string sa2dir;
 const string savedatadir = "resource\\gd_pc\\savedata\\";
 CRITICAL_SECTION filereplacesection;
+string exefilename;
+list<Code> codes = list<Code>();
+
 const char *_ReplaceFile(const char *lpFileName)
 {
 	EnterCriticalSection(&filereplacesection);
@@ -205,291 +226,6 @@ void HookTheAPI()
     }
 }
 
-enum CodeType : uint8_t
-{
-	write8, write16, write32, writefloat,
-	and8, and16, and32,
-	or8, or16, or32,
-	xor8, xor16, xor32,
-	ifeq8, ifeq16, ifeq32, ifeqfloat,
-	ifne8, ifne16, ifne32, ifnefloat,
-	ifltu8, ifltu16, ifltu32, ifltfloat,
-	iflts8, iflts16, iflts32,
-	ifltequ8, ifltequ16, ifltequ32, iflteqfloat,
-	iflteqs8, iflteqs16, iflteqs32,
-	ifgtu8, ifgtu16, ifgtu32, ifgtfloat,
-	ifgts8, ifgts16, ifgts32,
-	ifgtequ8, ifgtequ16, ifgtequ32, ifgteqfloat,
-	ifgteqs8, ifgteqs16, ifgteqs32,
-	ifmask8, ifmask16, ifmask32,
-	ifkbkey,
-	_else,
-	endif
-};
-
-struct Code
-{
-	CodeType type;
-	void *address;
-	bool pointer;
-	int offsetcount;
-	int32_t *offsets;
-	uint32_t value;
-	list<Code> trueCodes;
-	list<Code> falseCodes;
-};
-
-list<Code> codes = list<Code>();
-
-void *GetAddress(Code &code)
-{
-	if (!code.pointer)
-		return code.address;
-	void *addr = code.address;
-	addr = *(void **)addr;
-	if (code.offsetcount == 0 || addr == nullptr)
-		return addr;
-	for (int i = 0; i < code.offsetcount - 1; i++)
-	{
-		addr = (void *)((uint32_t)addr + code.offsets[i]);
-		addr = *(void **)addr;
-		if (addr == nullptr)
-			return nullptr;
-	}
-	addr = (void *)((uint32_t)addr + code.offsets[code.offsetcount - 1]);
-	return addr;
-}
-
-#define ifcode(size,op) if (*(uint##size##_t *)address op (uint##size##_t)it->value) \
-	ProcessCodeList(it->trueCodes); \
-else \
-	ProcessCodeList(it->falseCodes);
-
-#define ifcodes(size,op) if (*(int##size##_t *)address op (int##size##_t)it->value) \
-	ProcessCodeList(it->trueCodes); \
-else \
-	ProcessCodeList(it->falseCodes);
-
-#define ifcodef(op) if (*(float *)address op *(float *)&it->value) \
-	ProcessCodeList(it->trueCodes); \
-else \
-	ProcessCodeList(it->falseCodes);
-
-void ProcessCodeList(list<Code> &codes)
-{
-	for (list<Code>::iterator it = codes.begin(); it != codes.end(); it++)
-	{
-		void *address = GetAddress(*it);
-		if (it->type != ifkbkey && address == nullptr)
-		{
-			if (distance(it->falseCodes.begin(), it->falseCodes.end()) > 0)
-				ProcessCodeList(it->falseCodes);
-			continue;
-		}
-		switch (it->type)
-		{
-		case write8:
-			WriteData(address, (uint8_t)it->value);
-			break;
-		case write16:
-			WriteData(address, (uint16_t)it->value);
-			break;
-		case write32:
-		case writefloat:
-			WriteData(address, (uint32_t)it->value);
-			break;
-		case and8:
-			WriteData(address, (uint8_t)(*(uint8_t *)address & it->value));
-			break;
-		case and16:
-			WriteData(address, (uint16_t)(*(uint16_t *)address & it->value));
-			break;
-		case and32:
-			WriteData(address, (uint32_t)(*(uint32_t *)address & it->value));
-			break;
-		case or8:
-			WriteData(address, (uint8_t)(*(uint8_t *)address | it->value));
-			break;
-		case or16:
-			WriteData(address, (uint16_t)(*(uint16_t *)address | it->value));
-			break;
-		case or32:
-			WriteData(address, (uint32_t)(*(uint32_t *)address | it->value));
-			break;
-		case xor8:
-			WriteData(address, (uint8_t)(*(uint8_t *)address ^ it->value));
-			break;
-		case xor16:
-			WriteData(address, (uint16_t)(*(uint16_t *)address ^ it->value));
-			break;
-		case xor32:
-			WriteData(address, (uint32_t)(*(uint32_t *)address ^ it->value));
-			break;
-		case ifeq8:
-			ifcode(8,==)
-			break;
-		case ifeq16:
-			ifcode(16,==)
-			break;
-		case ifeq32:
-			ifcode(32,==)
-			break;
-		case ifeqfloat:
-			ifcodef(==)
-			break;
-		case ifne8:
-			ifcode(8,!=)
-			break;
-		case ifne16:
-			ifcode(16,!=)
-			break;
-		case ifne32:
-			ifcode(32,!=)
-			break;
-		case ifnefloat:
-			ifcodef(!=)
-			break;
-		case ifltu8:
-			ifcode(8,<)
-			break;
-		case ifltu16:
-			ifcode(16,<)
-			break;
-		case ifltu32:
-			ifcode(32,<)
-			break;
-		case ifltfloat:
-			ifcodef(<)
-			break;
-		case iflts8:
-			ifcodes(8,<)
-			break;
-		case iflts16:
-			ifcodes(16,<)
-			break;
-		case iflts32:
-			ifcodes(32,<)
-			break;
-		case ifltequ8:
-			ifcode(8,<=)
-			break;
-		case ifltequ16:
-			ifcode(16,<=)
-			break;
-		case ifltequ32:
-			ifcode(32,<=)
-			break;
-		case iflteqfloat:
-			ifcodef(<=)
-			break;
-		case iflteqs8:
-			ifcodes(8,<=)
-			break;
-		case iflteqs16:
-			ifcodes(16,<=)
-			break;
-		case iflteqs32:
-			ifcodes(32,<=)
-			break;
-		case ifgtu8:
-			ifcode(8,>)
-			break;
-		case ifgtu16:
-			ifcode(16,>)
-			break;
-		case ifgtu32:
-			ifcode(32,>)
-			break;
-		case ifgtfloat:
-			ifcodef(>)
-			break;
-		case ifgts8:
-			ifcodes(8,>)
-			break;
-		case ifgts16:
-			ifcodes(16,>)
-			break;
-		case ifgts32:
-			ifcodes(32,>)
-			break;
-		case ifgtequ8:
-			ifcode(8,>=)
-			break;
-		case ifgtequ16:
-			ifcode(16,>=)
-			break;
-		case ifgtequ32:
-			ifcode(32,>=)
-			break;
-		case ifgteqfloat:
-			ifcodef(>=)
-			break;
-		case ifgteqs8:
-			ifcodes(8,>=)
-			break;
-		case ifgteqs16:
-			ifcodes(16,>=)
-			break;
-		case ifgteqs32:
-			ifcodes(32,>=)
-			break;
-		case ifmask8:
-			if ((*(uint8_t *)address & (uint8_t)it->value) == (uint8_t)it->value)
-				ProcessCodeList(it->trueCodes);
-			else
-				ProcessCodeList(it->falseCodes);
-			break;
-		case ifmask16:
-			if ((*(uint16_t *)address & (uint16_t)it->value) == (uint16_t)it->value)
-				ProcessCodeList(it->trueCodes);
-			else
-				ProcessCodeList(it->falseCodes);
-			break;
-		case ifmask32:
-			if ((*(uint32_t *)address & it->value) == it->value)
-				ProcessCodeList(it->trueCodes);
-			else
-				ProcessCodeList(it->falseCodes);
-			break;
-		case ifkbkey:
-			if (GetAsyncKeyState(it->value))
-				ProcessCodeList(it->trueCodes);
-			else
-				ProcessCodeList(it->falseCodes);
-			break;
-		}
-	}
-}
-
-void __cdecl ProcessCodes()
-{
-	ProcessCodeList(codes);
-}
-
-int __cdecl SGDebugOutput_i(const char *Format, ...)
-{
-	va_list ap;
-	va_start(ap, Format);
-	int result = vprintf(Format, ap);
-	va_end(ap);
-	printf("\n");
-	return result;
-}
-
-const char *addrfmt = "[0x%08X] ";
-__declspec(naked) int __cdecl SGDebugOutput(const char *Format, ...)
-{
-	__asm
-	{
-		/*mov eax, [esp]
-		push eax
-		push addrfmt
-		call printf
-		add esp, 8*/
-		jmp SGDebugOutput_i
-	}
-}
-
 string NormalizePath(string path)
 {
 	string pathlower = path;
@@ -531,38 +267,90 @@ void ScanFolder(string path, int length)
 	FindClose(hfind);
 }
 
-unsigned char ReadCodes(istream &stream, list<Code> &list)
+void LoadMod(IniDictionary &modini, IniGroup &modinfo, string &dir, bool console)
 {
-	while (true)
+	IniDictionary::iterator gr = modini.find("IgnoreFiles");
+	if (gr != modini.end())
 	{
-		uint8_t t = stream.get();
-		if (t == 0xFF || t == _else || t == endif)
-			return t;
-		Code code = { };
-		code.pointer = (t & 0x80) == 0x80;
-		code.type = (CodeType)(t & 0x7F);
-		stream.read((char *)&code.address, sizeof(void *));
-		if (code.pointer)
+		IniGroup replaces = gr->second.Element;
+		for (IniGroup::iterator it = replaces.begin(); it != replaces.end(); it++)
 		{
-			code.offsetcount = stream.get();
-			code.offsets = new int[code.offsetcount];
-			for (int i = 0; i < code.offsetcount; i++)
-				stream.read((char *)&code.offsets[i], sizeof(int32_t));
+			filemap[NormalizePath(it->first)] = "nullfile";
+			if (console)
+				printf("Ignored file: %s\n", it->first.c_str());
 		}
-		stream.read((char *)&code.value, sizeof(uint32_t));
-		if (code.type >= ifeq8 && code.type <= ifkbkey)
-			switch (ReadCodes(stream, code.trueCodes))
-			{
-			case _else:
-				if (ReadCodes(stream, code.falseCodes) == 0xFF)
-					return 0xFF;
-				break;
-			case 0xFF:
-				return 0xFF;
-			}
-		list.push_back(code);
 	}
-	return 0;
+	gr = modini.find("ReplaceFiles");
+	if (gr != modini.end())
+	{
+		IniGroup replaces = gr->second.Element;
+		for (IniGroup::iterator it = replaces.begin(); it != replaces.end(); it++)
+			filereplaces[NormalizePath(it->first)] = NormalizePath(it->second);
+	}
+	gr = modini.find("SwapFiles");
+	if (gr != modini.end())
+	{
+		IniGroup replaces = gr->second.Element;
+		for (IniGroup::iterator it = replaces.begin(); it != replaces.end(); it++)
+		{
+			filereplaces[NormalizePath(it->first)] = NormalizePath(it->second);
+			filereplaces[NormalizePath(it->second)] = NormalizePath(it->first);
+		}
+	}
+	/*string sysfol = dir;
+	transform(sysfol.begin(), sysfol.end(), sysfol.begin(), ::tolower);
+	if (GetFileAttributesA(sysfol.c_str()) & FILE_ATTRIBUTE_DIRECTORY)
+		ScanFolder(sysfol, sysfol.length() + 1);*/
+	if (modinfo.find("EXEFile") != modinfo.end())
+	{
+		string modexe = modinfo["EXEFile"];
+		transform(modexe.begin(), modexe.end(), modexe.begin(), ::tolower);
+		if (modexe.compare(exefilename) != 0)
+		{
+			const char *msg = ("Mod \"" + modinfo["Name"] + "\" should be run from \"" + modexe + "\", but you are running \"" + exefilename + "\".\n\nContinue anyway?").c_str();
+			if (MessageBoxA(NULL, msg, "SG Mod Loader", MB_ICONWARNING | MB_YESNO) == IDNO)
+				ExitProcess(1);
+		}
+	}
+	string filename = modinfo["DLLFile"];
+	if (!filename.empty())
+	{
+		filename = dir + "\\" + filename;
+		HMODULE module = LoadLibraryA(filename.c_str());
+		if (module)
+		{
+			ModInfo *info = (ModInfo *)GetProcAddress(module, "SGModInfo");
+			if (info)
+			{
+				if (info->Patches)
+					for (int i = 0; i < info->PatchCount; i++)
+						WriteData(info->Patches[i].address, info->Patches[i].data, info->Patches[i].datasize);
+				if (info->Jumps)
+					for (int i = 0; i < info->JumpCount; i++)
+						WriteJump(info->Jumps[i].address, info->Jumps[i].data);
+				if (info->Calls)
+					for (int i = 0; i < info->CallCount; i++)
+						WriteCall(info->Calls[i].address, info->Calls[i].data);
+				if (info->Pointers)
+					for (int i = 0; i < info->PointerCount; i++)
+						WriteData(info->Pointers[i].address, &info->Pointers[i].data, sizeof(void*));
+				if (info->Exports)
+					for (int i = 0; i < info->ExportCount; i++)
+						dataoverrides[info->Exports[i].name] = info->Exports[i].data;
+				if (info->Init)
+					info->Init(dir.c_str());
+			}
+			else if (console)
+				printf("File \"%s\" was loaded, but is not a valid mod file. Ignore this if it's stand-alone DLL.\n", filename.c_str());
+		}
+		else if (console)
+			printf("Failed loading file \"%s\".\n", filename.c_str());
+	}	
+}
+
+void __cdecl ProcessCodes()
+{
+	ProcessCodeList(codes);
 }
 
 void __cdecl InitMods(void)
@@ -575,135 +363,83 @@ void __cdecl InitMods(void)
 	}
 	LoadLibrary(L".\\D3dHook.dll");
 	//HookTheAPI();
-	ifstream str = ifstream("mods\\SGModLoader.ini");
+	ifstream str = ifstream("cpkredir.ini");
 	if (!str.is_open())
 	{
-		MessageBox(NULL, L"mods\\SGModLoader.ini could not be read!", L"SG Mod Loader", MB_ICONWARNING);
+		MessageBox(NULL, L"cpkredir.ini could not be read!", L"SG Mod Loader", MB_ICONWARNING);
 		return;
 	}
 	IniDictionary ini = LoadINI(str);
 	str.close();
-	settings = ini[""].Element;
+
+	string modsdbpath = "mods\\ModsDB.ini";
+	IniDictionary::iterator gr = ini.find("CPKREDIR");
+	if (gr != ini.end()) {
+		cpkredir = ini["CPKREDIR"].Element;
+		string value = cpkredir["ModsDbIni"];
+		if (!value.empty())
+			modsdbpath = value;
+	}
+
+	bool console = false;
+	gr = ini.find("ModLoader");
+	if (gr != ini.end()) {
+		settings = ini["ModLoader"].Element;
+		string item = settings["ShowConsole"];
+		transform(item.begin(), item.end(), item.begin(), ::tolower);
+
+		if (item == "true")
+		{
+			AllocConsole();
+			SetConsoleTitle(L"SG Mod Loader output");
+			freopen("CONOUT$", "wb", stdout);
+			console = true;
+			printf("SG Mod Loader version %d, built %s\n", ModLoaderVer, __TIMESTAMP__);
+			printf("Loading mods from %s...\n", modsdbpath.c_str());
+		}
+	}
+
+	str = ifstream(modsdbpath);
+	if (!str.is_open())
+	{
+		MessageBox(NULL, (LPCWSTR)(modsdbpath + " could not be read!").c_str(), L"SG Mod Loader", MB_ICONWARNING);
+		return;
+	}
+	IniDictionary modsdb = LoadINI(str);
+	str.close();
+	IniGroup modsdbmain = modsdb["Main"].Element;
+	IniGroup modsdbmods = modsdb["Mods"].Element;
+
 	char pathbuf[MAX_PATH];
 	GetModuleFileNameA(NULL, pathbuf, MAX_PATH);
-	string exefilename = pathbuf;
+	exefilename = pathbuf;
 	exefilename = exefilename.substr(exefilename.find_last_of("/\\") + 1);
-	transform(exefilename.begin(), exefilename.end(), exefilename.begin(), ::tolower);
-	string item = settings["ShowConsole"];
-	transform(item.begin(), item.end(), item.begin(), ::tolower);
-	bool console = false;
-	if (item == "true")
-	{
-		AllocConsole();
-		SetConsoleTitle(L"SG Mod Loader output");
-		freopen("CONOUT$", "wb", stdout);
-		console = true;
-		printf("SG Mod Loader version %d, built %s\n", ModLoaderVer, __TIMESTAMP__);
-		printf("Loading mods...\n");
-	}
-	item = settings["ShowSGDebugOutput"];
-	transform(item.begin(), item.end(), item.begin(), ::tolower);
-	if (item == "true")
-		WriteJump((void *)0x426740, SGDebugOutput);
+	transform(exefilename.begin(), exefilename.end(), exefilename.begin(), ::tolower);	
+	string modsdbdir = basedir(modsdbpath);
+
 	InitializeCriticalSection(&filereplacesection);
 	DWORD oldprot;
-	VirtualProtect((void *)0x87342C, 0xA3BD4, PAGE_WRITECOPY, &oldprot);
-	char key[8];
-	for (int i = 1; i < 999; i++)
+	VirtualProtect((void *)0x400100, 0xfc1000, PAGE_WRITECOPY, &oldprot);
+	char key[12];
+	for (int i = 0; i < 999; i++)
 	{
-		sprintf_s(key, "Mod%d", i);
-		if (settings.find(key) == settings.end())
+		sprintf_s(key, "ActiveMod%d", i);
+		if (modsdbmain.find(key) == modsdbmain.end())
 			break;
-		string dir = "mods\\" + settings[key];
-		str = ifstream(dir + "\\mod.ini");
+		string modinipath = modsdbdir + modsdbmods[modsdbmain[key]];
+		string dir = basedir(modinipath);
+		str = ifstream(modinipath);
 		if (!str.is_open())
 		{
 			if (console)
-				printf("Could not open file mod.ini in \"mods\\%s\".\n", settings[key].c_str());
+				printf("Could not open %s.\n", modinipath);
 			continue;
 		}
 		IniDictionary modini = LoadINI(str);
-		IniGroup modinfo = modini[""].Element;
+		IniGroup modinfo = modini["Main"].Element;	
 		if (console)
-			printf("%d. %s\n", i, modinfo["Name"].c_str());
-		IniDictionary::iterator gr = modini.find("IgnoreFiles");
-		if (gr != modini.end())
-		{
-			IniGroup replaces = gr->second.Element;
-			for (IniGroup::iterator it = replaces.begin(); it != replaces.end(); it++)
-			{
-				filemap[NormalizePath(it->first)] = "nullfile";
-				if (console)
-					printf("Ignored file: %s\n", it->first.c_str());
-			}
-		}
-		gr = modini.find("ReplaceFiles");
-		if (gr != modini.end())
-		{
-			IniGroup replaces = gr->second.Element;
-			for (IniGroup::iterator it = replaces.begin(); it != replaces.end(); it++)
-				filereplaces[NormalizePath(it->first)] = NormalizePath(it->second);
-		}
-		gr = modini.find("SwapFiles");
-		if (gr != modini.end())
-		{
-			IniGroup replaces = gr->second.Element;
-			for (IniGroup::iterator it = replaces.begin(); it != replaces.end(); it++)
-			{
-				filereplaces[NormalizePath(it->first)] = NormalizePath(it->second);
-				filereplaces[NormalizePath(it->second)] = NormalizePath(it->first);
-			}
-		}
-		string sysfol = dir;
-		transform(sysfol.begin(), sysfol.end(), sysfol.begin(), ::tolower);
-		if (GetFileAttributesA(sysfol.c_str()) & FILE_ATTRIBUTE_DIRECTORY)
-			ScanFolder(sysfol, sysfol.length() + 1);
-		if (modinfo.find("EXEFile") != modinfo.end())
-		{
-			string modexe = modinfo["EXEFile"];
-			transform(modexe.begin(), modexe.end(), modexe.begin(), ::tolower);
-			if (modexe.compare(exefilename) != 0)
-			{
-				const char *msg = ("Mod \"" + modinfo["Name"] + "\" should be run from \"" + modexe + "\", but you are running \"" + exefilename + "\".\n\nContinue anyway?").c_str();
-				if (MessageBoxA(NULL, msg, "SG Mod Loader", MB_ICONWARNING | MB_YESNO) == IDNO)
-					ExitProcess(1);
-			}
-		}
-		string filename = modinfo["DLLFile"];
-		if (!filename.empty())
-		{
-			filename = dir + "\\" + filename;
-			HMODULE module = LoadLibraryA(filename.c_str());
-			if (module)
-			{
-				ModInfo *info = (ModInfo *)GetProcAddress(module, "SGModInfo");
-				if (info)
-				{
-					if (info->Patches)
-						for (int i = 0; i < info->PatchCount; i++)
-							WriteData(info->Patches[i].address, info->Patches[i].data, info->Patches[i].datasize);
-					if (info->Jumps)
-						for (int i = 0; i < info->JumpCount; i++)
-							WriteJump(info->Jumps[i].address, info->Jumps[i].data);
-					if (info->Calls)
-						for (int i = 0; i < info->CallCount; i++)
-							WriteCall(info->Calls[i].address, info->Calls[i].data);
-					if (info->Pointers)
-						for (int i = 0; i < info->PointerCount; i++)
-							WriteData(info->Pointers[i].address, &info->Pointers[i].data, sizeof(void*));
-					if (info->Version >= 2)
-						if (info->Exports)
-							for (int i = 0; i < info->ExportCount; i++)
-								dataoverrides[info->Exports[i].name] = info->Exports[i].data;
-					if (info->Init)
-						info->Init(dir.c_str());
-				}
-				else if (console)
-					printf("File \"%s\" is not a valid mod file.\n", filename.c_str());
-			}
-			else if (console)
-				printf("Failed loading file \"%s\".\n", filename.c_str());
-		}
+			printf("%d. %s\n", i, modini["Desc"].Element["Title"].c_str());
+		LoadMod(modini, modinfo, dir, console);
 	}
 	printf("Mod loading finished.\n");
 	str = ifstream("mods\\Codes.dat", ifstream::binary);

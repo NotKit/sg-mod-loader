@@ -30,12 +30,18 @@
     <ClInclude Include="SGModLoader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="codes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="dllmain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="codes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
